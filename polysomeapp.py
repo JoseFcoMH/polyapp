@@ -5,9 +5,11 @@
 #     "marimo>=0.20.2",
 #     "matplotlib>=3.10.8",
 #     "numpy>=2.2.6",
+#     "pandas>=2.3.3",
 #     "polars>=1.38.1",
 #     "pyarrow>=23.0.1",
 #     "pyzmq>=27.1.0",
+#     "scipy>=1.15.3",
 #     "vegafusion==2.0.3",
 #     "vl-convert-python==1.9.0.post1",
 # ]
@@ -19,7 +21,7 @@ __generated_with = "0.20.2"
 app = marimo.App(width="full")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     import marimo as mo
     import polars as pl
@@ -34,14 +36,37 @@ def _():
     from pathlib import Path
     import io
 
-    alt.themes.enable('fivethirtyeight')
     return Path, alt, io, mcolors, mo, np, pd, pl, plt
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(io, np, pl):
     from scipy.ndimage import median_filter, gaussian_filter1d
+    from dataclasses import dataclass
 
+    @dataclass
+    class plotConfig:
+        title_title_fontsize: int = 20
+        axis_label_fontsize: int = 14
+        axis_title_fontsize: int = 18
+        title_label_fontsize: int = 14
+        legend_title_fontsize: int = 16
+
+        def apply_config(self, plot):
+            return (
+                plot
+                    .configure_title(
+                        fontSize=self.title_title_fontsize
+                    )
+                    .configure_axis(
+                        labelFontSize=self.axis_label_fontsize,
+                        titleFontSize=self.axis_title_fontsize
+                    )
+                    .configure_legend(
+                        labelFontSize=self.title_label_fontsize,
+                        titleFontSize=self.legend_title_fontsize
+                    ) 
+            )
 
     def parse_polysomes(file_info):
         """Parse a fractionator CSV file from a marimo FileInfo object."""
@@ -108,10 +133,15 @@ def _(io, np, pl):
             shift -= n
         return shift, cc
 
-    return clean_signal, fft_cross_correlation_shift, parse_polysomes
+    return (
+        clean_signal,
+        fft_cross_correlation_shift,
+        parse_polysomes,
+        plotConfig,
+    )
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md("""
     # Fractionator output nice-ifier
@@ -119,7 +149,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     file_upload = mo.ui.file(
         label="Upload fractionator output (.csv files)",
@@ -130,7 +160,7 @@ def _(mo):
     return (file_upload,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(Path, file_upload, mcolors, mo, parse_polysomes, pl, plt):
     """Parse files and build initial metadata table."""
     mo.stop(not file_upload.value, mo.md("*Upload one or more CSV files to begin.*"))
@@ -152,7 +182,7 @@ def _(Path, file_upload, mcolors, mo, parse_polysomes, pl, plt):
     return meta_init, raw_profiles
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(meta_init, mo):
     sample_table = mo.ui.data_editor(
         data=meta_init.to_pandas(), 
@@ -163,7 +193,7 @@ def _(meta_init, mo):
     return (sample_table,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo, pl, sample_table):
     switches = mo.ui.array([
         mo.ui.switch(label=label, value=True)
@@ -193,6 +223,70 @@ def _(mo, sample_table, switches):
 
 
 @app.cell
+def _(mo):
+    mo.md("""
+    ### Plot controls
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    slider_title_title_fontsize = mo.ui.slider(
+        start=0, stop=30, step=1, debounce=True, value=20,
+        label = 'Main title fontsize'
+    )
+    slider_axis_label_fontsize = mo.ui.slider(
+        start=0, stop=30, step=1, debounce=True, value=14,
+        label = 'Axis label fontsize'
+    )
+    slider_axis_title_fontsize = mo.ui.slider(
+        start=0, stop=30, step=1, debounce=True, value=18,
+        label = 'Axis title fontsize'
+    )
+    slider_title_label_fontsize = mo.ui.slider(
+        start=0, stop=30, step=1, debounce=True, value=14,
+        label = 'Legend label fontsize'
+    )
+    slider_legend_title_fontsize = mo.ui.slider(
+        start=0, stop=30, step=1, debounce=True, value=16,
+        label = 'Legend title fontsize'
+    )
+
+    mo.hstack([
+        mo.vstack([slider_title_title_fontsize]),
+        mo.vstack([slider_axis_label_fontsize, slider_axis_title_fontsize]),
+        mo.vstack([slider_title_label_fontsize, slider_legend_title_fontsize]),
+    ])
+    return (
+        slider_axis_label_fontsize,
+        slider_axis_title_fontsize,
+        slider_legend_title_fontsize,
+        slider_title_label_fontsize,
+        slider_title_title_fontsize,
+    )
+
+
+@app.cell(hide_code=True)
+def _(
+    plotConfig,
+    slider_axis_label_fontsize,
+    slider_axis_title_fontsize,
+    slider_legend_title_fontsize,
+    slider_title_label_fontsize,
+    slider_title_title_fontsize,
+):
+    config = plotConfig(
+        title_title_fontsize = slider_title_title_fontsize.value,
+        axis_label_fontsize = slider_axis_label_fontsize.value,
+        axis_title_fontsize = slider_axis_title_fontsize.value,
+        title_label_fontsize = slider_title_label_fontsize.value,
+        legend_title_fontsize = slider_legend_title_fontsize.value
+    )
+    return (config,)
+
+
+@app.cell
 def _(combined_raw, mo, switch_suite):
     slice_range = mo.ui.range_slider(
         start=0, stop=combined_raw['position_index'].max(), 
@@ -213,7 +307,7 @@ def _(pd, pl, raw_profiles, sample_table, selected_labels):
     return combined_raw, label_colors
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(combined_processed, mo):
     y_metric_select = mo.ui.dropdown(
         options=[
@@ -256,10 +350,11 @@ def _(combined_processed, mo):
     )
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     alt,
     combined_raw,
+    config,
     label_colors,
     mo,
     np,
@@ -269,6 +364,8 @@ def _(
     slice_range,
 ):
     mo.md("## Raw profiles")
+
+    alt.theme.enable('vox')
 
     start, end = slice_range.value
     _rect = pl.DataFrame({
@@ -308,12 +405,16 @@ def _(
         )
     )
 
-    p_base = (_rect + _lines).properties(title="Raw absorbance profiles", width="container")
-    mo.hstack([raw_controls, p_base], widths=[1, 3])
+    _p_base = (_rect + _lines).properties(
+        title="Raw absorbance profiles", width="container"
+    )
+
+    _p_base = config.apply_config(_p_base)
+    mo.hstack([raw_controls, _p_base], widths=[1, 3])
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     clean_signal,
     fft_cross_correlation_shift,
@@ -364,10 +465,11 @@ def _(
     return (combined_processed,)
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(
     alt,
     combined_processed,
+    config,
     label_colors,
     line_alpha,
     line_width,
@@ -427,6 +529,8 @@ def _(
         )
         .properties(title="Nicer plot", width="container")
     )
+
+    _p_proc = config.apply_config(_p_proc)
 
     mo.hstack([processed_controls, _p_proc], widths=[1, 3])
     return (processed_df_obj,)
