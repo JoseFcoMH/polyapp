@@ -1,0 +1,5 @@
+polars>=1.38.1
+altair==6.0.0
+numpy>=2.2.6
+matplotlib>=3.10.8
+vegafusion==2.0.3
